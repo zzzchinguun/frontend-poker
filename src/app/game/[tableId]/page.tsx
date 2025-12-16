@@ -168,6 +168,7 @@ export default function GamePage() {
 
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [connected, setConnected] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState<string>('Initializing...');
   const [betAmount, setBetAmount] = useState(0);
   const [error, setError] = useState('');
 
@@ -180,30 +181,58 @@ export default function GamePage() {
       return;
     }
 
-    if (!session?.access_token) return;
+    if (!session?.access_token) {
+      setConnectionStatus('Waiting for session...');
+      return;
+    }
+
+    setConnectionStatus('Connecting to server...');
+    console.log('[Socket] Attempting connection to:', process.env.NEXT_PUBLIC_SOCKET_SERVER_URL);
 
     const socket = connectSocket(session.access_token);
 
     socket.on('connect', () => {
+      console.log('[Socket] Connected! Socket ID:', socket.id);
       setConnected(true);
+      setConnectionStatus('Connected - Joining table...');
       socket.emit('join_table', { tableId });
     });
 
-    socket.on('disconnect', () => {
+    socket.on('connect_error', (err) => {
+      console.error('[Socket] Connection error:', err.message);
+      setConnectionStatus(`Connection error: ${err.message}`);
+      setError(`Socket connection failed: ${err.message}`);
+    });
+
+    socket.on('disconnect', (reason) => {
+      console.log('[Socket] Disconnected:', reason);
       setConnected(false);
+      setConnectionStatus(`Disconnected: ${reason}`);
     });
 
     socket.on('game_state', (state: GameState) => {
+      console.log('[Socket] Received game_state:', state);
       setGameState(state);
       setBetAmount(state.currentBet);
+      setConnectionStatus('Connected');
+    });
+
+    socket.on('player_joined', (data) => {
+      console.log('[Socket] Player joined:', data);
+    });
+
+    socket.on('player_left', (data) => {
+      console.log('[Socket] Player left:', data);
     });
 
     socket.on('error', (msg: string) => {
+      console.error('[Socket] Error:', msg);
       setError(msg);
-      setTimeout(() => setError(''), 3000);
+      setTimeout(() => setError(''), 5000);
     });
 
     return () => {
+      console.log('[Socket] Cleaning up - leaving table');
       socket.emit('leave_table', { tableId });
       disconnectSocket();
     };
@@ -261,7 +290,7 @@ export default function GamePage() {
             </button>
             <div className="flex items-center gap-2">
               <div className={`w-2 h-2 rounded-full ${connected ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
-              <span className="text-sm text-neutral-400">{connected ? 'Connected' : 'Reconnecting...'}</span>
+              <span className="text-sm text-neutral-400">{connectionStatus}</span>
             </div>
           </div>
 

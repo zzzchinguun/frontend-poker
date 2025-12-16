@@ -12,6 +12,7 @@ interface PokerTable {
   big_blind: number;
   max_players: number;
   current_players: number;
+  created_by?: string;
 }
 
 const BLIND_OPTIONS = [
@@ -34,6 +35,7 @@ export default function LobbyPage() {
   const [maxPlayers, setMaxPlayers] = useState(6);
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState('');
+  const [deletingTableId, setDeletingTableId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -120,6 +122,21 @@ export default function LobbyPage() {
       setCreating(false);
       router.push(`/game/${data.id}`);
     }
+  };
+
+  const handleDeleteTable = async (tableId: string) => {
+    if (!confirm('Are you sure you want to delete this table?')) return;
+
+    setDeletingTableId(tableId);
+    const { error } = await supabase
+      .from('poker_tables')
+      .delete()
+      .eq('id', tableId);
+
+    if (error) {
+      alert('Failed to delete table: ' + error.message);
+    }
+    setDeletingTableId(null);
   };
 
   const getTableStatus = (table: PokerTable) => {
@@ -300,6 +317,27 @@ export default function LobbyPage() {
                             {table.current_players}/{table.max_players}
                           </span>
                         </div>
+
+                        {/* Delete button (only for table creator) */}
+                        {table.created_by === user?.id && (
+                          <button
+                            onClick={() => handleDeleteTable(table.id)}
+                            disabled={deletingTableId === table.id}
+                            className="p-2.5 text-neutral-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all"
+                            title="Delete table"
+                          >
+                            {deletingTableId === table.id ? (
+                              <svg className="w-5 h-5 animate-spin" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                              </svg>
+                            ) : (
+                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            )}
+                          </button>
+                        )}
 
                         {/* Join button */}
                         <button
